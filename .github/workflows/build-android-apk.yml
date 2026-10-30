@@ -12,23 +12,48 @@ jobs:
     permissions:
       contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: subosito/flutter-action@v2
+      - name: Check out Bethel project
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
         with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Install compatible Flutter SDK
+        uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.47.7'
           channel: stable
           cache: true
-      - name: Flutter version
+
+      - name: Check Flutter version
         run: flutter --version
-      - name: Generate native Android platform
-        run: flutter create --platforms=android --org org.bethelopenbible --project-name bethel_open_bible_church .
+
+      # This project's source distribution did not contain customized native
+      # Android files. Remove any outdated generated shell from the repo so
+      # `flutter create` actually refreshes Gradle/AGP/Kotlin together.
+      - name: Regenerate Android project with compatible Gradle
+        run: |
+          rm -rf android
+          flutter create --platforms=android --org org.bethelopenbible --project-name bethel_open_bible_church .
+          echo "--- Generated Gradle wrapper ---"
+          cat android/gradle/wrapper/gradle-wrapper.properties
+          echo "--- Generated Gradle plugin versions ---"
+          grep -E 'com.android.application|org.jetbrains.kotlin.android' android/settings.gradle.kts || true
+
       - name: Install packages
         run: flutter pub get
-      - name: Set app display name and launcher icon
+
+      - name: Apply church app name and icon
         run: |
           dart run tool/configure_android.dart
           dart run flutter_launcher_icons
-      - name: Compile APK
+
+      - name: Build release APK
         run: flutter build apk --release
+
       - name: Upload installable APK
         uses: actions/upload-artifact@v4
         with:
